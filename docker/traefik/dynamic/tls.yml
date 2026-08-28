@@ -1,0 +1,42 @@
+# =============================================================================
+# Traefik DYNAMIC configuration -- TLS certificates.
+# =============================================================================
+#
+# Traefik has two kinds of configuration:
+#   - STATIC config: entrypoints, providers, etc. Set once via CLI flags/file,
+#     read only at startup. In this project that lives in the `command:`
+#     block of the `traefik` service in docker-compose.yml.
+#   - DYNAMIC config: routers, middlewares, TLS certs. Can change at runtime.
+#     Docker-label-based routing (see the `labels:` on the nginx service) is
+#     one source of dynamic config; this file is another, loaded because
+#     docker-compose.yml passes `--providers.file.directory=/etc/traefik/dynamic`
+#     with `--providers.file.watch=true`. Traefik merges both sources.
+#
+# Why a file is needed for TLS specifically: Docker labels can attach a
+# router to an entrypoint and turn TLS on for it, but they cannot supply the
+# actual certificate files -- there is no `tls.certificate.certfile` label.
+# Certificates have to come from either Traefik's ACME (Let's Encrypt, which
+# can't issue for .local/.localhost domains) or a file provider like this one.
+#
+# Where local-cert.pem / local-key.pem come from: setup.sh runs `mkcert` for
+# ${BASE_DOMAIN} (and its wildcard) and writes the two files into ./certs on
+# the host, which is bind-mounted read-only into this container at
+# /etc/traefik/certs (see the `traefik` service's volumes in
+# docker-compose.yml). mkcert also installs its local CA into your host's
+# trust store, which is *why* browsers trust this cert without a warning --
+# it is a real cert chain, just one only your machine trusts, unlike a
+# plain self-signed cert.
+tls:
+  certificates:
+    - certFile: /etc/traefik/certs/local-cert.pem
+      keyFile: /etc/traefik/certs/local-key.pem
+  stores:
+    # The "default" store is what every router uses unless it names a
+    # different store explicitly. Setting defaultCertificate here means
+    # every *.${BASE_DOMAIN} router (web app, Mailpit UI, Traefik dashboard)
+    # picks up this certificate automatically -- none of their router labels
+    # need to reference a cert file individually.
+    default:
+      defaultCertificate:
+        certFile: /etc/traefik/certs/local-cert.pem
+        keyFile: /etc/traefik/certs/local-key.pem
