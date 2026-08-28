@@ -60,9 +60,24 @@ RUN apk add --no-cache \
 # Re-key the image's built-in www-data user/group to match the host, so the
 # non-root user this container runs as (see USER below) can read and write
 # the bind-mounted application code with the developer's own permissions.
-RUN deluser www-data \
-    && addgroup -g "${GID}" www-data \
-    && adduser -D -u "${UID}" -G www-data -s /bin/sh www-data
+# GID/UID may already belong to another entry in the base image (e.g. on
+# macOS the default primary group "staff" is GID 20, which collides with
+# Alpine's built-in "dialout" group) -- reuse/rename that existing entry
+# instead of failing, since the numeric ID is what matters for permissions.
+RUN set -eux; \
+    deluser www-data 2>/dev/null || true; \
+    delgroup www-data 2>/dev/null || true; \
+    if getent group "${GID}" > /dev/null 2>&1; then \
+      existing_group="$(getent group "${GID}" | cut -d: -f1)"; \
+      sed -i "s/^${existing_group}:/www-data:/" /etc/group; \
+    else \
+      addgroup -g "${GID}" www-data; \
+    fi; \
+    if getent passwd "${UID}" > /dev/null 2>&1; then \
+      existing_user="$(getent passwd "${UID}" | cut -d: -f1)"; \
+      deluser "${existing_user}" 2>/dev/null || true; \
+    fi; \
+    adduser -D -u "${UID}" -G www-data -s /bin/sh www-data
 
 COPY conf.d/zz-magento.ini /usr/local/etc/php/conf.d/zz-magento.ini
 
