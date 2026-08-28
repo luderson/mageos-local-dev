@@ -274,6 +274,10 @@ compose_up() {
     docker compose exec -T -u www-data php-fpm bin/magento config:set system/smtp/ssl "" --lock-env
     docker compose exec -T -u www-data php-fpm bin/magento cache:flush
 
+    # Two-factor auth has no useful purpose on a disposable local dev admin
+    # and otherwise blocks first login until an authenticator app is enrolled.
+    docker compose exec -T -u www-data php-fpm bin/magento module:disable Magento_TwoFactorAuth
+
     ok "MageOS installed."
     JUST_INSTALLED=1
 }
